@@ -1,0 +1,10 @@
+package com.example.whatsappordering;
+
+import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface OrderRepository extends MongoRepository<Order, String> {
+    // Spring Data MongoDB will automatically implement basic CRUD operations.
+    // We can add custom query methods here if needed.
+}
