@@ -1,0 +1,14 @@
+# Server Configuration
+server.port=8080
+
+# Application Name
+spring.application.name=easyfind-whatsapp-api
+
+# MongoDB Configuration
+spring.data.mongodb.uri=mongodb+srv://tmashigo:MyMDBpass%4021@cluster0.gqwsc20.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
+spring.data.mongodb.database=easyfind-db
+
+# Meta WhatsApp Cloud API Configuration
+webhook.verify-token=EASYFIND_SECRET_WEBHOOK_456789
+whatsapp.access-token=EAAnIA10JPJcBPuGC87BzZAfoZCeKeQhc4faTZCzZBE7sp6zbmkoXkbxF9UO9F1v5p9Da5v1b77ohIp1xUVD1GmuIEzRybaAISsR974WFKdhcCgjJLcvNHuvoZB7yP4Wbkp0cQV1eIYNc1PnT2viZAoIY7ULTiN2ZBZAVXLTFuj1KdnGJT7gH9ShFBAwsdNbG8JZBfYLQd7bBZBuroe06t3aMZCo9LHlrYdN0OxEZBOOfZCH5g1bT38jlbGQg4jLPdemIC3QQZD
+whatsapp.phone-id=757781044093024
