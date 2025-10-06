@@ -1,0 +1,29 @@
+package com.example.whatsappordering;
+
+import com.twilio.Twilio;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class WhatsappOrderingSystemApplication implements CommandLineRunner {
+
+    @Value("${twilio.account-sid}")
+    private String accountSid;
+
+    @Value("${twilio.auth-token}")
+    private String authToken;
+
+    public static void main(String[] args) {
+        SpringApplication.run(WhatsappOrderingSystemApplication.class, args);
+    }
+
+    @Override
+    public void run(String... args) throws Exception {
+        // Initialize the Twilio SDK when the application starts
+        Twilio.init(accountSid, authToken);
+        System.out.println("Twilio SDK Initialized.");
+        System.out.println("Application started successfully!");
+    }
+}
