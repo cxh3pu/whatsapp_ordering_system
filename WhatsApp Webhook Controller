@@ -1,0 +1,149 @@
+package com.example.whatsappordering;
+
+import com.example.whatsappordering.dto.WebhookRequest;
+import com.example.whatsappordering.service.WhatsAppService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+
+@RestController
+@RequestMapping("/whatsapp")
+public class WhatsAppController {
+
+    @Autowired
+    private WhatsAppService whatsAppService;
+    
+    @Autowired
+    private OrderRepository orderRepository;
+
+    @Value("${webhook.verify-token}")
+    private String verifyToken;
+
+    // In-memory session management
+    private final Map<String, Map<String, Object>> userSessions = new ConcurrentHashMap<>();
+
+    /**
+     * Handles Meta's webhook verification request.
+     */
+    @GetMapping
+    public ResponseEntity<String> verifyWebhook(
+            @RequestParam("hub.mode") String mode,
+            @RequestParam("hub.challenge") String challenge,
+            @RequestParam("hub.verify_token") String token) {
+        
+        if ("subscribe".equals(mode) && verifyToken.equals(token)) {
+            System.out.println("Webhook verified successfully!");
+            return ResponseEntity.ok(challenge);
+        } else {
+            System.err.println("Webhook verification failed.");
+            return ResponseEntity.status(403).build();
+        }
+    }
+
+    /**
+     * Handles incoming WhatsApp messages from Meta.
+     */
+    @PostMapping
+    public ResponseEntity<Void> handleWhatsAppMessage(@RequestBody WebhookRequest body) {
+        System.out.println("Received webhook: " + body);
+
+        // Extract message details safely
+        Optional<WebhookRequest.Message> messageOpt = Optional.ofNullable(body)
+                .map(WebhookRequest::getEntry).filter(e -> !e.isEmpty()).map(e -> e.get(0))
+                .map(WebhookRequest.Entry::getChanges).filter(c -> !c.isEmpty()).map(c -> c.get(0))
+                .map(WebhookRequest.Change::getValue)
+                .map(WebhookRequest.Value::getMessages).filter(m -> !m.isEmpty()).map(m -> m.get(0));
+
+        if (messageOpt.isEmpty() || messageOpt.get().getText() == null) {
+            System.out.println("Not a user text message; ignoring.");
+            return ResponseEntity.ok().build();
+        }
+        
+        WebhookRequest.Message message = messageOpt.get();
+        String from = message.getFrom();
+        String incomingMsg = message.getText().getBody().toLowerCase().trim();
+
+        // Get or create session
+        Map<String, Object> session = userSessions.computeIfAbsent(from, k -> new ConcurrentHashMap<>());
+        String state = (String) session.getOrDefault("state", "start");
+        
+        String responseMessage;
+
+        // --- Same state machine logic as before ---
+        switch (state) {
+            case "start":
+                responseMessage = "Hi there! Welcome to \"The Burger Joint\" 🍔\n\nWhat would you like to order today?\n\n1. Classic Burger\n2. Cheese Deluxe\n3. Veggie Burger\n\nPlease reply with the number of your choice.";
+                session.put("state", "ordering_item");
+                break;
+
+            case "ordering_item":
+                Map<String, String> menu = Map.of("1", "Classic Burger", "2", "Cheese Deluxe", "3", "Veggie Burger");
+                String choice = menu.get(incomingMsg);
+                if (choice != null) {
+                    session.put("item", choice);
+                    responseMessage = "Great choice! How many \"" + choice + "\" would you like?";
+                    session.put("state", "ordering_quantity");
+                } else {
+                    responseMessage = "Sorry, I didn't understand that. Please reply with a valid menu number (1, 2, or 3).";
+                }
+                break;
+
+            case "ordering_quantity":
+                try {
+                    int quantity = Integer.parseInt(incomingMsg);
+                    if (quantity > 0) {
+                        session.put("quantity", quantity);
+                        responseMessage = "Got it. We'll get " + quantity + " of " + session.get("item") + " ready for you.\n\nWhat's the delivery address?";
+                        session.put("state", "ordering_address");
+                    } else {
+                        responseMessage = "Please enter a valid number for the quantity.";
+                    }
+                } catch (NumberFormatException e) {
+                    responseMessage = "That doesn't look like a valid number. Please try again.";
+                }
+                break;
+            
+            case "ordering_address":
+                session.put("address", message.getText().getBody()); // Use original casing for address
+                responseMessage = "Thanks! Let's confirm your order:\n\n*Item:* " + session.get("item") + "\n*Quantity:* " + session.get("quantity") + "\n*Address:* " + session.get("address") + "\n\nIs this correct? (Reply \"yes\" to confirm or \"no\" to start over)";
+                session.put("state", "confirming_order");
+                break;
+
+            case "confirming_order":
+                 if ("yes".equals(incomingMsg)) {
+                    Order newOrder = new Order(
+                        from,
+                        (String) session.get("item"),
+                        (int) session.get("quantity"),
+                        (String) session.get("address")
+                    );
+                    orderRepository.save(newOrder);
+
+                    responseMessage = "Thank you for your order! We will notify you when it is on its way. 🛵";
+                    userSessions.remove(from); // Clear session
+                } else if ("no".equals(incomingMsg)) {
+                    responseMessage = "Okay, let's start over.\n\nWhat would you like to order today?\n\n1. Classic Burger\n2. Cheese Deluxe\n3. Veggie Burger";
+                    session.put("state", "start");
+                } else {
+                    responseMessage = "Please reply with \"yes\" or \"no\".";
+                }
+                break;
+
+            default:
+                responseMessage = "Oops! Something went wrong. Let's start over. What would you like to order?";
+                session.put("state", "start");
+                break;
+        }
+
+        // Send the reply message using the new service
+        whatsAppService.sendMessage(from, responseMessage).subscribe();
+
+        // Acknowledge receipt of the webhook immediately
+        return ResponseEntity.ok().build();
+    }
+}
