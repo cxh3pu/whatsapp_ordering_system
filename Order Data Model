@@ -1,0 +1,27 @@
+package com.example.whatsappordering;
+
+import lombok.Data;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
+import java.time.LocalDateTime;
+
+@Data // Lombok annotation to generate getters, setters, toString, etc.
+@Document(collection = "orders") // Marks this class as a MongoDB document
+public class Order {
+
+    @Id
+    private String id;
+    private String customerNumber;
+    private String item;
+    private int quantity;
+    private String deliveryAddress;
+    private String status = "Pending";
+    private LocalDateTime createdAt = LocalDateTime.now();
+
+    public Order(String customerNumber, String item, int quantity, String deliveryAddress) {
+        this.customerNumber = customerNumber;
+        this.item = item;
+        this.quantity = quantity;
+        this.deliveryAddress = deliveryAddress;
+    }
+}
